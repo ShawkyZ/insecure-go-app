@@ -10,9 +10,7 @@ import (
 func InsecureHTTPClient() *http.Client {
 	// Disabling certificate verification makes MITM attacks possible
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // VULNERABLE
-		},
+		TLSClientConfig: &tls.Config{},
 	}
 	return &http.Client{Transport: transport}
 }
