@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 
 	"github.com/dgrijalva/jwt-go"
 	_ "github.com/go-sql-driver/mysql"
@@ -95,8 +96,18 @@ func getUserHandler(w http.ResponseWriter, r *http.Request) {
 func execHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := r.FormValue("cmd")
 
-	// Direct execution of user input - Command Injection vulnerability
-	output, err := exec.Command("sh", "-c", cmd).Output()
+	safeRe := regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
+	if !safeRe.MatchString(cmd) {
+		http.Error(w, "Invalid command", http.StatusBadRequest)
+		return
+	}
+	allowed := map[string]bool{"ls": true, "date": true, "whoami": true}
+	if !allowed[cmd] {
+		http.Error(w, "Command not allowed", http.StatusForbidden)
+		return
+	}
+	safeCmd := cmd
+	output, err := exec.Command(safeCmd).Output()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
