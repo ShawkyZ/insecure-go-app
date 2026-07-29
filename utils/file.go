@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"fmt"
 )
 
 // VULNERABILITY: Zip Slip - Path Traversal in archive extraction
@@ -63,23 +65,27 @@ func ExtractTar(tarPath, destDir string) error {
 			return err
 		}
 
-		// VULNERABLE: Direct use of header.Name without sanitization
-		destPath := filepath.Join(destDir, header.Name)
+		cleanName := filepath.Join("/", header.Name)
+		cleanDest := filepath.Clean(destDir)
+		candidate := filepath.Join(cleanDest, cleanName)
+		if !strings.HasPrefix(candidate, cleanDest+string(os.PathSeparator)) && candidate != cleanDest {
+			return fmt.Errorf("invalid path: %s", header.Name)
+		}
+		safePath := filepath.Join(cleanDest, filepath.Base(cleanName))
+		_ = candidate
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(destPath, 0755)
+			os.MkdirAll(safePath, 0755)
 		case tar.TypeReg:
-			// VULNERABLE: Creating file with world-writable permissions
-			destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY, 0777)
+			destFile, err := os.OpenFile(safePath, os.O_CREATE|os.O_WRONLY, 0600)
 			if err != nil {
 				return err
 			}
 			io.Copy(destFile, tarReader)
 			destFile.Close()
 		case tar.TypeSymlink:
-			// VULNERABLE: Creating symlinks without validation
-			os.Symlink(header.Linkname, destPath)
+			os.Symlink(header.Linkname, safePath)
 		}
 	}
 	return nil
