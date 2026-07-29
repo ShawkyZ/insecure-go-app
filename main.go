@@ -36,10 +36,10 @@ type User struct {
 }
 
 // VULNERABILITY 1: Hardcoded credentials
-const (
-	AdminPassword = "admin123"
+var (
+	AdminPassword = os.Getenv("ADMIN_PASSWORD")
 	APIKey        = "sk-1234567890abcdef"
-	DBPassword    = "root:password123@tcp(localhost:3306)/mydb"
+	DBPassword    = os.Getenv("DB_PASSWORD")
 )
 
 func main() {
@@ -71,10 +71,9 @@ func main() {
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.URL.Query().Get("username")
 
-	// Direct string concatenation in SQL query - SQL Injection vulnerability
-	query := "SELECT id, username, email FROM users WHERE username = '" + username + "'"
+	query := "SELECT id, username, email FROM users WHERE username = ?"
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, username)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,8 +108,19 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Query().Get("name")
 
-	// No sanitization of file path - Path Traversal vulnerability
-	content, err := ioutil.ReadFile(filename)
+	var content []byte
+	var err error
+	switch filename {
+	case "readme":
+		content, err = ioutil.ReadFile("/var/www/files/readme.txt")
+	case "license":
+		content, err = ioutil.ReadFile("/var/www/files/license.txt")
+	case "help":
+		content, err = ioutil.ReadFile("/var/www/files/help.txt")
+	default:
+		http.Error(w, "invalid file", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -132,8 +142,17 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 func templateHandler(w http.ResponseWriter, r *http.Request) {
 	userTemplate := r.URL.Query().Get("template")
 
-	// Parsing user-controlled template - SSTI vulnerability
-	tmpl, err := template.New("user").Parse(userTemplate)
+	var tmpl *template.Template
+	var err error
+	switch userTemplate {
+	case "hello":
+		tmpl, err = template.New("user").Parse("Hello, {{.Name}}!")
+	case "welcome":
+		tmpl, err = template.New("user").Parse("Welcome, {{.Name}}!")
+	default:
+		http.Error(w, "invalid template", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -154,9 +173,13 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// No validation of file type or content
 	content, _ := ioutil.ReadAll(file)
 
-	// Saving file with original name without sanitization
-	uploadPath := filepath.Join("/uploads", header.Filename)
-	ioutil.WriteFile(uploadPath, content, 0777) // Insecure permissions
+	safeName := filepath.Base(filepath.Clean("/" + header.Filename))
+	if safeName == "." || safeName == "/" || safeName == "" {
+		http.Error(w, "invalid filename", http.StatusBadRequest)
+		return
+	}
+	uploadPath := filepath.Join("/uploads", safeName)
+	ioutil.WriteFile(uploadPath, content, 0600)
 
 	fmt.Fprintf(w, "File uploaded to: %s", uploadPath)
 }
