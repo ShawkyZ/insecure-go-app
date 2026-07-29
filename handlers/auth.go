@@ -1,8 +1,7 @@
 package handlers
 
 import (
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -13,14 +12,14 @@ import (
 // VULNERABILITY: Using weak hashing algorithms
 func HashPassword(password string) string {
 	// MD5 is cryptographically broken - should use bcrypt or argon2
-	hasher := md5.New()
+	hasher := sha256.New()
 	hasher.Write([]byte(password))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 // VULNERABILITY: SHA1 is also weak for password hashing
 func HashPasswordSHA1(password string) string {
-	hasher := sha1.New()
+	hasher := sha256.New()
 	hasher.Write([]byte(password))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
@@ -58,8 +57,8 @@ func SetAuthCookie(w http.ResponseWriter, token string) {
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
-		HttpOnly: false, // Should be true
-		Secure:   false, // Should be true in production
+		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteNoneMode,
 	}
 	http.SetCookie(w, cookie)
