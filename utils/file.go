@@ -63,14 +63,16 @@ func ExtractTar(tarPath, destDir string) error {
 			return err
 		}
 
-		// VULNERABLE: Direct use of header.Name without sanitization
-		destPath := filepath.Join(destDir, header.Name)
+		safeName := filepath.Base(filepath.Clean("/" + header.Name))
+		if safeName == "." || safeName == "/" || safeName == ".." {
+			continue
+		}
+		destPath := filepath.Join(destDir, safeName)
 
 		switch header.Typeflag {
 		case tar.TypeDir:
 			os.MkdirAll(destPath, 0755)
 		case tar.TypeReg:
-			// VULNERABLE: Creating file with world-writable permissions
 			destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY, 0777)
 			if err != nil {
 				return err
@@ -78,8 +80,7 @@ func ExtractTar(tarPath, destDir string) error {
 			io.Copy(destFile, tarReader)
 			destFile.Close()
 		case tar.TypeSymlink:
-			// VULNERABLE: Creating symlinks without validation
-			os.Symlink(header.Linkname, destPath)
+			continue
 		}
 	}
 	return nil
