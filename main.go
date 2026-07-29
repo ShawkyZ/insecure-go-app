@@ -37,9 +37,9 @@ type User struct {
 
 // VULNERABILITY 1: Hardcoded credentials
 const (
-	AdminPassword = "admin123"
+	AdminPassword = ""
 	APIKey        = "sk-1234567890abcdef"
-	DBPassword    = "root:password123@tcp(localhost:3306)/mydb"
+	DBPassword    = os.Getenv("DB_PASSWORD")
 )
 
 func main() {
@@ -71,10 +71,9 @@ func main() {
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.URL.Query().Get("username")
 
-	// Direct string concatenation in SQL query - SQL Injection vulnerability
-	query := "SELECT id, username, email FROM users WHERE username = '" + username + "'"
+	query := "SELECT id, username, email FROM users WHERE username = ?"
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, username)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,8 +108,17 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Query().Get("name")
 
-	// No sanitization of file path - Path Traversal vulnerability
-	content, err := ioutil.ReadFile(filename)
+	var content []byte
+	var err error
+	switch filename {
+	case "readme":
+		content, err = ioutil.ReadFile("/var/www/files/readme.txt")
+	case "license":
+		content, err = ioutil.ReadFile("/var/www/files/license.txt")
+	default:
+		http.Error(w, "invalid file", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -132,8 +140,19 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 func templateHandler(w http.ResponseWriter, r *http.Request) {
 	userTemplate := r.URL.Query().Get("template")
 
-	// Parsing user-controlled template - SSTI vulnerability
-	tmpl, err := template.New("user").Parse(userTemplate)
+	var tmpl *template.Template
+	var err error
+	switch userTemplate {
+	case "hello":
+		tmpl, err = template.New("user").Parse("Hello, World!")
+	case "welcome":
+		tmpl, err = template.New("user").Parse("Welcome to our site!")
+	case "goodbye":
+		tmpl, err = template.New("user").Parse("Goodbye!")
+	default:
+		http.Error(w, "Invalid template", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
