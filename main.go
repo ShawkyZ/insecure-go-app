@@ -105,18 +105,39 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(output)
 }
 
-// VULNERABILITY 6: Path Traversal
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Query().Get("name")
 
-	// No sanitization of file path - Path Traversal vulnerability
-	content, err := ioutil.ReadFile(filename)
+	baseDir := "/var/app/files"
+	cleaned := filepath.Clean(filepath.Join(baseDir, filepath.Base(filename)))
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	absPath, err := filepath.Abs(cleaned)
+	if err != nil || !hasPrefixPath(absPath, absBase) {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	content, err := ioutil.ReadFile(absPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	w.Write(content)
+}
+
+func hasPrefixPath(path, prefix string) bool {
+	if path == prefix {
+		return true
+	}
+	if len(path) > len(prefix) && path[:len(prefix)] == prefix && (path[len(prefix)] == filepath.Separator) {
+		return true
+	}
+	return false
 }
 
 // VULNERABILITY 7: Cross-Site Scripting (XSS)
