@@ -37,9 +37,9 @@ type User struct {
 
 // VULNERABILITY 1: Hardcoded credentials
 const (
-	AdminPassword = "admin123"
+	AdminPassword = ""
 	APIKey        = "sk-1234567890abcdef"
-	DBPassword    = "root:password123@tcp(localhost:3306)/mydb"
+	DBPassword    = os.Getenv("DB_PASSWORD")
 )
 
 func main() {
@@ -71,10 +71,9 @@ func main() {
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.URL.Query().Get("username")
 
-	// Direct string concatenation in SQL query - SQL Injection vulnerability
-	query := "SELECT id, username, email FROM users WHERE username = '" + username + "'"
+	query := "SELECT id, username, email FROM users WHERE username = ?"
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, username)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -95,8 +94,21 @@ func getUserHandler(w http.ResponseWriter, r *http.Request) {
 func execHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := r.FormValue("cmd")
 
-	// Direct execution of user input - Command Injection vulnerability
-	output, err := exec.Command("sh", "-c", cmd).Output()
+	var output []byte
+	var err error
+	switch cmd {
+	case "date":
+		output, err = exec.Command("date").Output()
+	case "uptime":
+		output, err = exec.Command("uptime").Output()
+	case "hostname":
+		output, err = exec.Command("hostname").Output()
+	case "whoami":
+		output, err = exec.Command("whoami").Output()
+	default:
+		http.Error(w, "command not allowed", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,7 +128,18 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write(content)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	tmpl, tmplErr := template.New("file").Parse("{{.}}")
+	if tmplErr != nil {
+		http.Error(w, tmplErr.Error(), http.StatusInternalServerError)
+		return
+	}
+	if execErr := tmpl.Execute(w, string(content)); execErr != nil {
+		http.Error(w, execErr.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // VULNERABILITY 7: Cross-Site Scripting (XSS)
@@ -132,14 +155,14 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 func templateHandler(w http.ResponseWriter, r *http.Request) {
 	userTemplate := r.URL.Query().Get("template")
 
-	// Parsing user-controlled template - SSTI vulnerability
-	tmpl, err := template.New("user").Parse(userTemplate)
+	const safeTemplate = "<html><body><h1>User input:</h1><p>{{.}}</p></body></html>"
+	tmpl, err := template.New("user").Parse(safeTemplate)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, userTemplate)
 }
 
 // VULNERABILITY 9: Insecure file upload
@@ -163,10 +186,9 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // VULNERABILITY 10: Open Redirect
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("url")
+	_ = r.URL.Query().Get("url")
 
-	// Redirecting to user-supplied URL without validation
-	http.Redirect(w, r, url, http.StatusFound)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // VULNERABILITY 11: Insecure JWT validation
