@@ -39,7 +39,7 @@ type User struct {
 const (
 	AdminPassword = "admin123"
 	APIKey        = "sk-1234567890abcdef"
-	DBPassword    = "root:password123@tcp(localhost:3306)/mydb"
+	DBPassword    = os.Getenv("DB_PASSWORD")
 )
 
 func main() {
