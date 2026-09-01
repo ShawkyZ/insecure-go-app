@@ -3,9 +3,7 @@ module insecure-go-app
 go 1.19
 
 require (
-	// VULNERABLE: jwt-go has known vulnerabilities (CVE-2020-26160)
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-
+	github.com/dgrijalva/jwt-go/v4 v4.0.0-preview1
 	// VULNERABLE: MySQL driver - older version
 	github.com/go-sql-driver/mysql v1.4.0
 
