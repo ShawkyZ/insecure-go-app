@@ -6,10 +6,11 @@ import (
 	"crypto/des"
 	"crypto/rc4"
 	"encoding/base64"
+	"os"
 )
 
 // VULNERABILITY: Hardcoded encryption key
-var encryptionKey = []byte("mysecretkey12345")
+var encryptionKey = []byte(os.Getenv("APP_ENCRYPTION_KEY"))
 
 // VULNERABILITY: Hardcoded IV (Initialization Vector)
 var iv = []byte("1234567890123456")
